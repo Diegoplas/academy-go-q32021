@@ -4,10 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strconv"
 
+	"github.com/Diegoplas/go-bootcamp-deliverable/csvdata"
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
+
+func GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+
+	allPokemons, err := csvdata.ListPokemons()
+	if err != nil {
+		fmt.Printf("Error listing pokemons %s\n", err)
+	}
+
+	requestedIndex, err := strconv.Atoi(wantedIndex)
+	if err != nil {
+		log.Println("Error converting string to int")
+		return model.PokemonData{}, fmt.Errorf("error: something happened")
+	}
+
+	for _, pokemon := range allPokemons {
+		if pokemon.ID == requestedIndex {
+			return pokemon, nil
+		}
+	}
+
+	return model.PokemonData{}, fmt.Errorf("error: no pokemon found")
+}
 
 func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 
@@ -26,7 +51,7 @@ func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 	pokemonData := model.PokemonExternalData{}
 	unmarshalErr := json.Unmarshal(data, &pokemonData)
 	if unmarshalErr != nil {
-		return model.PokemonData{}, fmt.Errorf("error performing the unmarshal %v", err.Error())
+		return model.PokemonData{}, fmt.Errorf("error performing unmarshal %v", err.Error())
 	}
 	//loggear el error
 	//controller se encarga de distintas situaciones.

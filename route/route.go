@@ -10,6 +10,7 @@ import (
 
 func GetRouter() (router *mux.Router) {
 	router = mux.NewRouter()
-	router.HandleFunc("/pokemon/{id}", controller.GetPokemonHandler).Methods(http.MethodGet)
+	router.HandleFunc("/first-generation/{id}", controller.GetPokemonFromCSVHandler).Methods(http.MethodGet)
+	router.HandleFunc("/second-generation/{id}", controller.GetPokemonExternalAPIHandler).Methods(http.MethodGet)
 	return
 }
