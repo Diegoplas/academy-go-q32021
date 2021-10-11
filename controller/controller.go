@@ -15,7 +15,19 @@ import (
 	"github.com/unrolled/render"
 )
 
-func GetPokemonFromCSVHandler(w http.ResponseWriter, r *http.Request) {
+type getFromCSV interface {
+	GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error)
+}
+
+type PokemonHandler struct {
+	getFirstGenPokemon getFromCSV
+}
+
+func NewGetPokemonHandler(getFirstGenPokemon getFromCSV) PokemonHandler {
+	return PokemonHandler{getFirstGenPokemon: getFirstGenPokemon}
+}
+
+func (pk PokemonHandler) GetPokemonFromCSVHandler(w http.ResponseWriter, r *http.Request) {
 
 	requestIndex := mux.Vars(r)["id"]
 
@@ -26,7 +38,7 @@ func GetPokemonFromCSVHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := service.GetPokemonFromCSV(wantedIndex)
+	response, err := pk.getFirstGenPokemon.GetPokemonFromCSV(wantedIndex)
 	if err != nil {
 		errorResponse := model.ErrorResponse{Err: err.Error()}
 		render.New().JSON(w, http.StatusInternalServerError, errorResponse)

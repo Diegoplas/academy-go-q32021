@@ -8,13 +8,24 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Diegoplas/go-bootcamp-deliverable/csvdata"
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
-func GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+type GetPokemonService struct {
+	repository getter
+}
 
-	allPokemons, err := csvdata.ListPokemons()
+type getter interface {
+	ListPokemons() ([]model.PokemonData, error)
+}
+
+func NewGetPokemonService(repository getter) GetPokemonService {
+	return GetPokemonService{repository: repository}
+}
+
+func (gps GetPokemonService) GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+
+	allPokemons, err := gps.repository.ListPokemons()
 	if err != nil {
 		fmt.Printf("Error listing pokemons %s\n", err)
 	}
@@ -40,21 +51,21 @@ func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 
 	response, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("The HTTP request failed with error %s\n", err)
+		log.Printf("The HTTP request failed with error %s\n", err)
 	}
 
 	data, err := ioutil.ReadAll(response.Body) // manage error
 	if err != nil {
-		return model.PokemonData{}, fmt.Errorf("error reading response body %v", err.Error())
+		log.Printf("error reading response body: %v\n", err.Error())
+		return model.PokemonData{}, fmt.Errorf("error reading data")
 	}
 
 	pokemonData := model.PokemonExternalData{}
 	unmarshalErr := json.Unmarshal(data, &pokemonData)
 	if unmarshalErr != nil {
-		return model.PokemonData{}, fmt.Errorf("error performing unmarshal %v", err.Error())
+		log.Printf("unmarshal failed: %v\n", err.Error())
+		return model.PokemonData{}, fmt.Errorf("error getting data %v", err.Error())
 	}
-	//loggear el error
-	//controller se encarga de distintas situaciones.
 
 	formatedPokemonData := formatPokemonData(pokemonData)
 

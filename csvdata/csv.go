@@ -12,66 +12,30 @@ import (
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
-func WritePokemonIntoCSV(externalPokemonData model.PokemonData) error {
-
-	strPokemonID := strconv.Itoa(externalPokemonData.ID)
-	row := []string{
-
-		strPokemonID,
-		strings.Title(externalPokemonData.Name),
-		strconv.Itoa(externalPokemonData.Height),
-		externalPokemonData.Type1,
-		externalPokemonData.Type2,
-	}
-
-	csvFile, err := os.OpenFile(config.SecondGenCSVPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		log.Printf("Error opening csv file: %s", err)
-		return fmt.Errorf("CSV error")
-	}
-
-	defer csvFile.Close()
-
-	csvLines, err := csv.NewReader(csvFile).ReadAll()
-	if err != nil {
-		return fmt.Errorf("error reading csv file: %v", err.Error())
-	}
-
-	for _, line := range csvLines {
-		if line[0] == strPokemonID {
-			return nil
-		}
-	}
-
-	writer := csv.NewWriter(csvFile)
-
-	errWrite := writer.Write(row)
-	if errWrite != nil {
-		fmt.Println("Error:", errWrite)
-	}
-	defer writer.Flush()
-
-	return nil
+type PokemonRepo struct {
 }
 
-func ListPokemons() ([]model.PokemonData, error) {
+func (pr PokemonRepo) ListPokemons() ([]model.PokemonData, error) {
 
 	// open the file
 	csvFile, err := os.Open(config.FirstGenCSVPath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening csv file: %v", err.Error())
+		log.Printf("Error opening csv file %v:", err.Error())
+		return nil, fmt.Errorf("error loading database")
 	}
 
 	defer csvFile.Close()
 
 	csvLines, err := csv.NewReader(csvFile).ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("error reading csv file: %v", err.Error())
+		log.Printf("Error csv reader %v:", err.Error())
+		return nil, fmt.Errorf("error reading database")
 	}
 
 	allPokemons, err := linesToSlice(csvLines)
 	if err != nil {
-		return nil, fmt.Errorf("data handling error: %v", err.Error())
+		log.Printf("Error opening csv file %v:", err.Error())
+		return nil, fmt.Errorf("data handling error")
 	}
 
 	return allPokemons, nil
@@ -109,4 +73,46 @@ func linesToSlice(csvLines [][]string) ([]model.PokemonData, error) {
 	}
 
 	return allPokemons, nil
+}
+
+func WritePokemonIntoCSV(externalPokemonData model.PokemonData) error {
+
+	strPokemonID := strconv.Itoa(externalPokemonData.ID)
+	row := []string{
+
+		strPokemonID,
+		strings.Title(externalPokemonData.Name),
+		strconv.Itoa(externalPokemonData.Height),
+		externalPokemonData.Type1,
+		externalPokemonData.Type2,
+	}
+
+	csvFile, err := os.OpenFile(config.SecondGenCSVPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		log.Printf("Error opening csv file: %s", err)
+		return fmt.Errorf("database error")
+	}
+
+	defer csvFile.Close()
+
+	csvLines, err := csv.NewReader(csvFile).ReadAll()
+	if err != nil {
+		return fmt.Errorf("error reading csv file: %v", err.Error())
+	}
+
+	for _, line := range csvLines {
+		if line[0] == strPokemonID {
+			return nil
+		}
+	}
+
+	writer := csv.NewWriter(csvFile)
+
+	errWrite := writer.Write(row)
+	if errWrite != nil {
+		log.Println("Error writing into csv file:", errWrite)
+	}
+	defer writer.Flush()
+
+	return nil
 }
