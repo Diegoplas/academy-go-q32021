@@ -4,32 +4,70 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
-func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
+type getter interface {
+	ListPokemons() ([]model.PokemonData, error)
+}
+
+type PokemonRepo struct {
+	repository getter
+}
+
+func NewRepositoryService(repository getter) PokemonRepo {
+	return PokemonRepo{repository: repository}
+}
+
+func (pr PokemonRepo) GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+
+	allPokemons, err := pr.repository.ListPokemons()
+	if err != nil {
+		fmt.Printf("Error listing pokemons %s\n", err)
+	}
+
+	requestedIndex, err := strconv.Atoi(wantedIndex)
+	if err != nil {
+		log.Println("Error converting string to int")
+		return model.PokemonData{}, fmt.Errorf("error: something happened")
+	}
+
+	for _, pokemon := range allPokemons {
+		if pokemon.ID == requestedIndex {
+			return pokemon, nil
+		}
+	}
+
+	return model.PokemonData{}, fmt.Errorf("error: no pokemon found")
+}
+
+func (pr PokemonRepo) GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", wantedIndex)
 
 	response, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("The HTTP request failed with error %s\n", err)
+		log.Printf("The HTTP request failed with error %s\n", err)
+		return model.PokemonData{}, fmt.Errorf("request error")
 	}
 
-	data, err := ioutil.ReadAll(response.Body) // manage error
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return model.PokemonData{}, fmt.Errorf("error reading response body %v", err.Error())
+		log.Printf("error reading response body: %v\n", err.Error())
+		return model.PokemonData{}, fmt.Errorf("error reading data")
 	}
 
 	pokemonData := model.PokemonExternalData{}
 	unmarshalErr := json.Unmarshal(data, &pokemonData)
+
 	if unmarshalErr != nil {
-		return model.PokemonData{}, fmt.Errorf("error performing the unmarshal %v", err.Error())
+		log.Printf("unmarshal failed: %v\n", err.Error())
+		return model.PokemonData{}, fmt.Errorf("error getting data %v", err.Error())
 	}
-	//loggear el error
-	//controller se encarga de distintas situaciones.
 
 	formatedPokemonData := formatPokemonData(pokemonData)
 
