@@ -1,70 +1,174 @@
 package service
 
 import (
-	"reflect"
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
-// var wantedResponse = model.PokemonData{
-// 	ID:   94,
-// 	Name: "Gengar",
-// }
+type mockGetter struct {
+	listPokemonResponse []model.PokemonData
+	wantErr             bool
+}
+
+func (mg mockGetter) ListPokemons() ([]model.PokemonData, error) {
+	if mg.wantErr {
+		return nil, fmt.Errorf("list pokemons error")
+	}
+	return mg.listPokemonResponse, nil
+}
 
 func TestGetPokemonService_GetPokemonFromCSV(t *testing.T) {
 
-	type mockGetter struct {
-		repository getter
-		listPokemonResponse []model.PokemonData
-		wantErr             bool
-	}
-
-	type getter interface {
-		ListPokemons() ([]model.PokemonData, error)
-	}
-
-	func (mg mockGetter) ListPokemons()([]model.PokemonData, error) {
-		if mg.wantErr{
-			return nil, fmt.Errorf("list pokemons error")
-		}
-		return mg.listPokemonResponse, nil
-	}
-
-	type fields struct {
-		listPokemonRepo getter
-	}
-
-	type args struct {
-		wantedIndex string
-	}
-
 	tests := []struct {
-		name     string
-		fields   fields
-		response model.PokemonData
-		wantErr  bool
-		args     args
+		name         string
+		mockedGetter mockGetter
+		requestedID  string
 	}{
 		{
-			name: "Pokemon obtained correctly",
-			fields: fields{
-				listPokemonRepo: mockGetter{listPokemonResponse: MockedPokemonRepo},
-			},
-			response: wantedResponse,
-			wantErr:  false,
+			name:         "Valid test",
+			mockedGetter: mockGetter{listPokemonResponse: MockedPokemonResponse},
+			requestedID:  "95",
+		},
+		{
+			name:         "Invalid - empty param",
+			mockedGetter: mockGetter{wantErr: true},
+			requestedID:  "",
+		},
+		{
+			name:         "Invalid - error on CSVdata functions",
+			mockedGetter: mockGetter{wantErr: true},
 		},
 	}
-	// for _, tt := range tests {
-	// 	t.Run(tt.name, func(t *testing.T) {
-	// 		got, err := tt.gps.repository.GetPokemonFromCSV(tt.args.wantedIndex)
-	// 		if (err != nil) != tt.wantErr {
-	// 			t.Errorf("GetPokemonService.GetPokemonFromCSV() error = %v, wantErr %v", err, tt.wantErr)
-	// 			return
-	// 		}
-	// 		if !reflect.DeepEqual(got, tt.want) {
-	// 			t.Errorf("GetPokemonService.GetPokemonFromCSV() = %v, want %v", got, tt.want)
-	// 		}
-	// 	})
-	// }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testRepo := NewRepositoryService(tt.mockedGetter)
+			gotPokemon, err := testRepo.GetPokemonFromCSV(tt.requestedID)
+			if (err != nil) != tt.mockedGetter.wantErr {
+				t.Errorf("GetPokemonFromCSV() error = %v, wantErr %v", err, tt.mockedGetter.wantErr)
+				return
+			}
+			gotID := ""
+			if gotPokemon.ID != 0 {
+				gotID = strconv.Itoa(gotPokemon.ID)
+			}
+			if gotID != tt.requestedID {
+				t.Errorf("GetPokemonFromCSV() Got ID = %v, wanted ID %v", gotID, tt.requestedID)
+			}
+		})
+	}
+}
+
+type mockRequestSender struct {
+	method   string
+	url      string
+	response *http.Response
+	wantErr  bool
+}
+
+type mockRequestParser struct {
+	wantErr bool
+}
+
+func (mrs *mockRequestSender) SendRequest(method, url, values map[string]interface{}) (*http.Response, error) {
+	if mrs.wantErr {
+		return nil, fmt.Errorf("send request error")
+	}
+	return mrs.response, nil
+}
+
+func (mrp *mockRequestParser) ParseResponse(resp *http.Response) ([]byte, error) {
+	if mrp.wantErr {
+		return nil, fmt.Errorf("request parser error")
+	}
+	parsedResponse, _ := ioutil.ReadAll(resp.Body)
+	return parsedResponse, nil
+}
+
+func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
+
+	externalJSONResponse := `{
+		"id": 251,
+		"name": "celebi",
+		"height": 6,
+		"types": [
+			{
+				"slot": 1,
+				"type": {
+					"name": "psychic",
+					"url": "https://pokeapi.co/api/v2/type/14/"
+				}
+			},
+			{
+				"slot": 2,
+				"type": {
+					"name": "grass",
+					"url": "https://pokeapi.co/api/v2/type/12/"
+				}
+			}
+		],
+	}`
+
+	formatedResponse := model.PokemonData{
+		ID:     251,
+		Name:   "celebi",
+		Height: 6,
+		Type1:  "psychic",
+		Type2:  "grass",
+	}
+
+	validRequestedID := "251"
+	validURL := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", validRequestedID)
+
+	type globals struct {
+		requestSender  func(method, url, values map[string]interface{}) (*http.Response, error)
+		responseParser func(resp *http.Response) ([]byte, error)
+	}
+	tests := []struct {
+		name           string
+		requestedID    string
+		mockedGetter   mockGetter
+		globals        globals
+		wantedResponse model.PokemonData
+		wantErr        bool
+	}{
+		{
+			name:         "Valid test",
+			requestedID:  validRequestedID,
+			mockedGetter: mockGetter{wantErr: false},
+			globals: globals{
+				requestSender: (&mockRequestSender{
+					method: http.MethodGet,
+					url:    validURL,
+					response: &http.Response{
+						StatusCode:    http.StatusOK,
+						Body:          ioutil.NopCloser(bytes.NewBufferString(externalJSONResponse)),
+						ContentLength: int64(len(externalJSONResponse)),
+					},
+				}).SendRequest,
+				responseParser: (&mockRequestParser{}).ParseResponse,
+			},
+			wantedResponse: formatedResponse,
+			wantErr:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testRepo := NewRepositoryService(tt.mockedGetter)
+			gotPokemon, err := testRepo.GetPokemonFromExternalAPI(tt.requestedID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetPokemonFromCSV() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotPokemon != tt.wantedResponse {
+				t.Errorf("GetPokemonFromCSV() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
+			}
+		})
+	}
 }

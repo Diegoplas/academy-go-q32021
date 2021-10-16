@@ -2,7 +2,7 @@ package service
 
 import "github.com/Diegoplas/go-bootcamp-deliverable/model"
 
-var MockedPokemonRepo = []model.PokemonData{
+var MockedPokemonResponse = []model.PokemonData{
 	{
 		ID:     94,
 		Name:   "Gengar",

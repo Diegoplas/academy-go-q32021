@@ -11,21 +11,21 @@ import (
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
-type GetPokemonService struct {
-	repository getter
-}
-
 type getter interface {
 	ListPokemons() ([]model.PokemonData, error)
 }
 
-func NewGetPokemonService(repository getter) GetPokemonService {
-	return GetPokemonService{repository: repository}
+type PokemonRepo struct {
+	repository getter
 }
 
-func (gps GetPokemonService) GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+func NewRepositoryService(repository getter) PokemonRepo {
+	return PokemonRepo{repository: repository}
+}
 
-	allPokemons, err := gps.repository.ListPokemons()
+func (pr PokemonRepo) GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error) {
+
+	allPokemons, err := pr.repository.ListPokemons()
 	if err != nil {
 		fmt.Printf("Error listing pokemons %s\n", err)
 	}
@@ -45,16 +45,17 @@ func (gps GetPokemonService) GetPokemonFromCSV(wantedIndex string) (model.Pokemo
 	return model.PokemonData{}, fmt.Errorf("error: no pokemon found")
 }
 
-func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
+func (pr PokemonRepo) GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", wantedIndex)
 
 	response, err := http.Get(url)
 	if err != nil {
 		log.Printf("The HTTP request failed with error %s\n", err)
+		return model.PokemonData{}, fmt.Errorf("request error")
 	}
 
-	data, err := ioutil.ReadAll(response.Body) // manage error
+	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Printf("error reading response body: %v\n", err.Error())
 		return model.PokemonData{}, fmt.Errorf("error reading data")
@@ -62,6 +63,7 @@ func GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 
 	pokemonData := model.PokemonExternalData{}
 	unmarshalErr := json.Unmarshal(data, &pokemonData)
+
 	if unmarshalErr != nil {
 		log.Printf("unmarshal failed: %v\n", err.Error())
 		return model.PokemonData{}, fmt.Errorf("error getting data %v", err.Error())

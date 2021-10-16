@@ -12,11 +12,12 @@ import (
 
 func GetRouter() (router *mux.Router) {
 
-	pokemonService := service.NewGetPokemonService(csvdata.PokemonRepo{})
+	pokemonService := service.NewRepositoryService(csvdata.PokemonRepo{})
 	pokemonHandler := controller.NewGetPokemonHandler(pokemonService)
 
 	router = mux.NewRouter()
 	router.HandleFunc("/first-generation/{id}", pokemonHandler.GetPokemonFromCSVHandler).Methods(http.MethodGet)
-	router.HandleFunc("/second-generation/{id}", controller.GetPokemonExternalAPIHandler).Methods(http.MethodGet)
+	router.HandleFunc("/second-generation/{id}", pokemonHandler.GetPokemonExternalAPIHandler).Methods(http.MethodGet)
+	router.HandleFunc("/worker-pool", controller.WorkerPoolHandler).Methods(http.MethodGet)
 	return
 }
