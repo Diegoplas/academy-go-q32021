@@ -71,23 +71,11 @@ type mockRequestSender struct {
 	wantErr  bool
 }
 
-type mockRequestParser struct {
-	wantErr bool
-}
-
 func (mrs *mockRequestSender) SendRequest(method, url, values map[string]interface{}) (*http.Response, error) {
 	if mrs.wantErr {
 		return nil, fmt.Errorf("send request error")
 	}
 	return mrs.response, nil
-}
-
-func (mrp *mockRequestParser) ParseResponse(resp *http.Response) ([]byte, error) {
-	if mrp.wantErr {
-		return nil, fmt.Errorf("request parser error")
-	}
-	parsedResponse, _ := ioutil.ReadAll(resp.Body)
-	return parsedResponse, nil
 }
 
 func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
@@ -101,14 +89,14 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 				"slot": 1,
 				"type": {
 					"name": "psychic",
-					"url": "https://pokeapi.co/api/v2/type/14/"
+					"url": "https://testApi.co/type/14/"
 				}
 			},
 			{
 				"slot": 2,
 				"type": {
 					"name": "grass",
-					"url": "https://pokeapi.co/api/v2/type/12/"
+					"url": "https://testApi.co/type/12/"
 				}
 			}
 		],
@@ -123,11 +111,10 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 	}
 
 	validRequestedID := "251"
-	validURL := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", validRequestedID)
+	validURL := fmt.Sprintf("https://testApi.co/pokemon/%s?name", validRequestedID)
 
 	type globals struct {
-		requestSender  func(method, url, values map[string]interface{}) (*http.Response, error)
-		responseParser func(resp *http.Response) ([]byte, error)
+		requestSender func(method, url, values map[string]interface{}) (*http.Response, error)
 	}
 	tests := []struct {
 		name           string
@@ -151,7 +138,6 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 						ContentLength: int64(len(externalJSONResponse)),
 					},
 				}).SendRequest,
-				responseParser: (&mockRequestParser{}).ParseResponse,
 			},
 			wantedResponse: formatedResponse,
 			wantErr:        false,
@@ -163,11 +149,11 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 			testRepo := NewRepositoryService(tt.mockedGetter)
 			gotPokemon, err := testRepo.GetPokemonFromExternalAPI(tt.requestedID)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPokemonFromCSV() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetPokemonFromExternalAPI() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if gotPokemon != tt.wantedResponse {
-				t.Errorf("GetPokemonFromCSV() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
+				t.Errorf("GetPokemonFromExternalAPI() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
 			}
 		})
 	}

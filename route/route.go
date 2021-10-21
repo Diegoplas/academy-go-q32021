@@ -18,6 +18,6 @@ func GetRouter() (router *mux.Router) {
 	router = mux.NewRouter()
 	router.HandleFunc("/first-generation/{id}", pokemonHandler.GetPokemonFromCSVHandler).Methods(http.MethodGet)
 	router.HandleFunc("/second-generation/{id}", pokemonHandler.GetPokemonExternalAPIHandler).Methods(http.MethodGet)
-	router.HandleFunc("/worker-pool", controller.WorkerPoolHandler).Methods(http.MethodGet)
+	router.HandleFunc("/worker-pool", pokemonHandler.WorkerPoolHandler).Methods(http.MethodGet)
 	return
 }
