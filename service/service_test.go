@@ -123,7 +123,7 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 	}
 
 	validRequestedID := "251"
-	validURL := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", validRequestedID)
+	validURL := fmt.Sprintf("https://testapi.co/api/v2/pokemon/%s?name", validRequestedID)
 
 	type globals struct {
 		requestSender  func(method, url, values map[string]interface{}) (*http.Response, error)
@@ -162,13 +162,14 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testRepo := NewRepositoryService(tt.mockedGetter)
 			gotPokemon, err := testRepo.GetPokemonFromExternalAPI(tt.requestedID)
+			if gotPokemon != tt.wantedResponse {
+				t.Errorf("GetPokemonFromExternalAPI() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
+			}
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPokemonFromCSV() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetPokemonFromExternalAPI() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if gotPokemon != tt.wantedResponse {
-				t.Errorf("GetPokemonFromCSV() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
-			}
+
 		})
 	}
 }

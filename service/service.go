@@ -109,8 +109,7 @@ func (pr PokemonRepo) CreateReaderFromCSVFile(csvPath string) (*csv.Reader, erro
 		log.Println("Error opening the CSV file to create reader.")
 		return nil, errors.New("database error")
 	}
-	//defer csvfile.Close()
-	fmt.Println(":: AFTER OPENING THE CSV FILE")
+
 	return csv.NewReader(csvfile), nil
 
 }

@@ -115,14 +115,40 @@ func validateSecondGenID(index string) (string, error) {
 	return index, nil
 }
 
-func worker(readChan chan []string, writeChan chan []string) {
+func worker(readChan chan []string, writeChan chan model.PokemonData, itemsPerWorker int) {
+	worksCount := 0
 	for {
 		select {
 		case row, ok := <-readChan:
 			if !ok {
 				return
 			}
-			writeChan <- row
+
+			// format the received row.
+			pokemonID, err := strconv.Atoi(row[0])
+			if err != nil {
+				log.Println(err)
+				break
+			}
+			pokemonHeight, err := strconv.Atoi(row[2])
+			if err != nil {
+				log.Println(err)
+				break
+			}
+			pokemonInfo := model.PokemonData{
+				ID:     pokemonID,
+				Name:   row[1],
+				Height: pokemonHeight,
+				Type1:  row[3],
+				Type2:  row[4],
+			}
+
+			writeChan <- pokemonInfo
+			worksCount += 1
+		}
+		// if worker completes it's corresponding items, the worker must rest.
+		if worksCount == itemsPerWorker {
+			break
 		}
 	}
 }
@@ -146,17 +172,21 @@ func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Reques
 	itemsPerWorker, err := strconv.Atoi(r.URL.Query().Get("items_per_workers"))
 	if err != nil || itemsPerWorker == 0 {
 		log.Println("Error converting items_per_workers param to int.")
-		errorResponse := model.ErrorResponse{Err: "Invalid or empty items per worker param."}
+		errorResponse := model.ErrorResponse{Err: "Invalid or empty items per_worker param."}
 		render.New().JSON(w, http.StatusBadRequest, errorResponse)
 		return
 	}
 
 	if itemsPerWorker > items {
-		errorResponse := model.ErrorResponse{Err: "Items per worker param should be lower than items param."}
+		errorResponse := model.ErrorResponse{Err: "Items per_worker param should be lower than items param."}
 		render.New().JSON(w, http.StatusBadRequest, errorResponse)
 	}
 
 	numberOfWorkers := items / itemsPerWorker
+	// if number of workers have a remainder, add another worker to work on the missing tasks.
+	if remainder := items % itemsPerWorker; remainder != 0 {
+		numberOfWorkers += 1
+	}
 
 	csvReader, err := pk.getPokemons.CreateReaderFromCSVFile(config.FirstGenCSVPath)
 	if err != nil {
@@ -167,17 +197,17 @@ func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Reques
 
 	// create the input/output channels
 	srcCh := make(chan []string)
-	outputCh := make(chan []string, items)
+	outputCh := make(chan model.PokemonData, items)
 
 	// manage synchronization
-	var wg sync.WaitGroup
+	var waitGroup sync.WaitGroup
 
 	// declare the workers
 	for workerID := 1; workerID <= numberOfWorkers; workerID++ {
-		wg.Add(1)
+		waitGroup.Add(1)
 		go func() {
-			defer wg.Done()
-			worker(srcCh, outputCh)
+			defer waitGroup.Done()
+			worker(srcCh, outputCh, itemsPerWorker)
 		}()
 	}
 
@@ -195,7 +225,6 @@ func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Reques
 				break
 			}
 			rowNumber += 1
-			fmt.Println("rownumber", rowNumber, "-- items to get", itemsToGet)
 			if rowNumber <= itemsToGet {
 				idNum, err := strconv.Atoi(record[0])
 				if err != nil {
@@ -208,7 +237,6 @@ func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Reques
 					srcCh <- record
 				}
 			} else {
-				fmt.Println("BREAK ON NUMBERS OVER ITEMS")
 				break
 			}
 		}
@@ -216,33 +244,13 @@ func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Reques
 	}()
 
 	// wait for worker group to finish.
-	go func() {
-		wg.Wait()
-		close(outputCh)
-	}()
+	waitGroup.Wait()
+	close(outputCh)
 
-	// format the response.
+	// Append each element to response from the output channel.
 	response := []model.PokemonData{}
-	for pokemonInfo := range outputCh {
-		pokemonID, err := strconv.Atoi(pokemonInfo[0])
-		if err != nil {
-			log.Println(err)
-			break
-		}
-		pokemonHeight, err := strconv.Atoi(pokemonInfo[2])
-		if err != nil {
-			log.Println(err)
-			break
-		}
-		pokemon := model.PokemonData{
-			ID:     pokemonID,
-			Name:   pokemonInfo[1],
-			Height: pokemonHeight,
-			Type1:  pokemonInfo[3],
-			Type2:  pokemonInfo[4],
-		}
+	for pokemon := range outputCh {
 		response = append(response, pokemon)
-		fmt.Println(response)
 	}
 
 	render.New().JSON(w, http.StatusOK, &response)
