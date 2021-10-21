@@ -1,11 +1,14 @@
 package service
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
@@ -97,4 +100,17 @@ func formatPokemonData(externalPokemonData model.PokemonExternalData) model.Poke
 	}
 
 	return formatedPokemonData
+}
+
+func (pr PokemonRepo) CreateReaderFromCSVFile(csvPath string) (*csv.Reader, error) {
+
+	csvfile, err := os.Open(csvPath)
+	if err != nil {
+		log.Println("Error opening the CSV file to create reader.")
+		return nil, errors.New("database error")
+	}
+	//defer csvfile.Close()
+	fmt.Println(":: AFTER OPENING THE CSV FILE")
+	return csv.NewReader(csvfile), nil
+
 }

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +22,7 @@ import (
 type getPokemonInfo interface {
 	GetPokemonFromCSV(wantedIndex string) (model.PokemonData, error)
 	GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error)
+	CreateReaderFromCSVFile(csvPath string) (*csv.Reader, error)
 }
 
 type PokemonHandler struct {
@@ -39,14 +39,14 @@ func (pk PokemonHandler) GetPokemonFromCSVHandler(w http.ResponseWriter, r *http
 
 	wantedIndex, err := validateFirstGenID(requestIndex)
 	if err != nil {
-		errorResponse := model.ErrorResponse{Err: err.Error()}
+		errorResponse := model.ErrorResponse{Err: "Error validating ID."}
 		render.New().JSON(w, http.StatusBadRequest, errorResponse)
 		return
 	}
 
 	response, err := pk.getPokemons.GetPokemonFromCSV(wantedIndex)
 	if err != nil {
-		errorResponse := model.ErrorResponse{Err: err.Error()}
+		errorResponse := model.ErrorResponse{Err: "Wasn't able to retrieve the selected pokemon."}
 		render.New().JSON(w, http.StatusInternalServerError, errorResponse)
 		return
 	}
@@ -118,16 +118,16 @@ func validateSecondGenID(index string) (string, error) {
 func worker(readChan chan []string, writeChan chan []string) {
 	for {
 		select {
-		case row, ok := <-writeChan:
+		case row, ok := <-readChan:
 			if !ok {
 				return
 			}
-			readChan <- row
+			writeChan <- row
 		}
 	}
 }
 
-func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
+func (pk PokemonHandler) WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 	numberType := strings.ToLower(r.URL.Query().Get("type"))
 	if (numberType != "odd" && numberType != "even") || numberType == "" {
 		errorResponse := model.ErrorResponse{Err: "Invalid or empty param Type."}
@@ -158,13 +158,12 @@ func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 
 	numberOfWorkers := items / itemsPerWorker
 
-	csvfile, err := os.Open(config.FirstGenCSVPath)
+	csvReader, err := pk.getPokemons.CreateReaderFromCSVFile(config.FirstGenCSVPath)
 	if err != nil {
-		log.Fatal(err)
+		errorResponse := model.ErrorResponse{Err: "Database error."}
+		render.New().JSON(w, http.StatusInternalServerError, errorResponse)
+		return
 	}
-	defer csvfile.Close()
-
-	reader := csv.NewReader(csvfile)
 
 	// create the input/output channels
 	srcCh := make(chan []string)
@@ -178,7 +177,7 @@ func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			worker(outputCh, srcCh)
+			worker(srcCh, outputCh)
 		}()
 	}
 
@@ -186,16 +185,17 @@ func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 	itemsToGet := items * 2 //total items to get, after odd or even choice
 	go func() {
 		for {
-			record, err := reader.Read()
+			record, err := csvReader.Read()
 
 			if err == io.EOF {
-				fmt.Println("ending because of EOF")
+				log.Println("ending because of EOF")
 				break
 			} else if err != nil {
 				log.Println(err)
 				break
 			}
 			rowNumber += 1
+			fmt.Println("rownumber", rowNumber, "-- items to get", itemsToGet)
 			if rowNumber <= itemsToGet {
 				idNum, err := strconv.Atoi(record[0])
 				if err != nil {
@@ -208,6 +208,7 @@ func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 					srcCh <- record
 				}
 			} else {
+				fmt.Println("BREAK ON NUMBERS OVER ITEMS")
 				break
 			}
 		}
@@ -241,7 +242,7 @@ func WorkerPoolHandler(w http.ResponseWriter, r *http.Request) {
 			Type2:  pokemonInfo[4],
 		}
 		response = append(response, pokemon)
-
+		fmt.Println(response)
 	}
 
 	render.New().JSON(w, http.StatusOK, &response)
