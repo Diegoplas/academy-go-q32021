@@ -90,6 +90,25 @@ func (mrp *mockRequestParser) ParseResponse(resp *http.Response) ([]byte, error)
 	return parsedResponse, nil
 }
 
+func init() {
+	Client = &mockClient{}
+}
+
+type mockClient struct {
+	DoFunc func(req *http.Request) (*http.Response, error)
+}
+
+func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
+	return GetDoFunc(req)
+}
+
+var (
+	GetDoFunc func(req *http.Request) (*http.Response, error)
+)
+
+func mockClientDoFactory(func(req *http.Request) (*http.Response, error)) mockClient {
+	return mockClient{DoFunc: GetDoFunc}
+}
 func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 
 	externalJSONResponse := `{
@@ -123,36 +142,22 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 	}
 
 	validRequestedID := "251"
-	validURL := fmt.Sprintf("https://testapi.co/api/v2/pokemon/%s?name", validRequestedID)
-
-	type globals struct {
-		requestSender  func(method, url, values map[string]interface{}) (*http.Response, error)
-		responseParser func(resp *http.Response) ([]byte, error)
-	}
 	tests := []struct {
 		name           string
 		requestedID    string
-		mockedGetter   mockGetter
-		globals        globals
+		mockClient     mockClient
 		wantedResponse model.PokemonData
 		wantErr        bool
 	}{
 		{
-			name:         "Valid test",
-			requestedID:  validRequestedID,
-			mockedGetter: mockGetter{wantErr: false},
-			globals: globals{
-				requestSender: (&mockRequestSender{
-					method: http.MethodGet,
-					url:    validURL,
-					response: &http.Response{
-						StatusCode:    http.StatusOK,
-						Body:          ioutil.NopCloser(bytes.NewBufferString(externalJSONResponse)),
-						ContentLength: int64(len(externalJSONResponse)),
-					},
-				}).SendRequest,
-				responseParser: (&mockRequestParser{}).ParseResponse,
-			},
+			name:        "Valid test",
+			requestedID: validRequestedID,
+			mockClient: mockClient{func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       ioutil.NopCloser(bytes.NewBufferString(externalJSONResponse)),
+				}, nil
+			}},
 			wantedResponse: formatedResponse,
 			wantErr:        false,
 		},
@@ -160,8 +165,8 @@ func TestGetPokemonService_GetPokemonFromExternalAPI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testRepo := NewRepositoryService(tt.mockedGetter)
-			gotPokemon, err := testRepo.GetPokemonFromExternalAPI(tt.requestedID)
+			testMocker := mockClientDoFactory(GetDoFunc)
+			gotPokemon, err := testMocker.GetPokemonFromExternalAPI(tt.requestedID)
 			if gotPokemon != tt.wantedResponse {
 				t.Errorf("GetPokemonFromExternalAPI() Got ID = %v, wanted ID %v", gotPokemon, tt.wantedResponse)
 			}
