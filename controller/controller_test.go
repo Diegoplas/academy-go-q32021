@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/csv"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 type handlersMock struct {
 	CSVResponse      model.PokemonData
 	externalResponse model.PokemonData
+	csvReader        *csv.Reader
 	wantErr          bool
 }
 
@@ -25,9 +27,16 @@ func (hm handlersMock) GetPokemonFromCSV(wantedIndex string) (model.PokemonData,
 
 func (hm handlersMock) GetPokemonFromExternalAPI(wantedIndex string) (model.PokemonData, error) {
 	if hm.wantErr {
-		return model.PokemonData{}, fmt.Errorf("error getting pokemon from csv file")
+		return model.PokemonData{}, fmt.Errorf("error getting pokemon from external api")
 	}
 	return hm.externalResponse, nil
+}
+
+func (hm handlersMock) CreateReaderFromCSVFile(csvPath string) (*csv.Reader, error) {
+	if hm.wantErr {
+		return nil, fmt.Errorf("error making csv reader")
+	}
+	return hm.csvReader, nil
 }
 
 func TestPokemonHandler_GetPokemonFromCSVHandler(t *testing.T) {
