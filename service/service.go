@@ -14,6 +14,18 @@ import (
 	"github.com/Diegoplas/go-bootcamp-deliverable/model"
 )
 
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	Client HTTPClient
+)
+
+func init() {
+	Client = &http.Client{}
+}
+
 type getter interface {
 	ListPokemons() ([]model.PokemonData, error)
 }
@@ -52,10 +64,17 @@ func (pr PokemonRepo) GetPokemonFromExternalAPI(wantedIndex string) (model.Pokem
 
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s?name", wantedIndex)
 
-	response, err := http.Get(url)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Printf("The HTTP request failed with error %s\n", err)
 		return model.PokemonData{}, fmt.Errorf("request error")
+	}
+	response, err := Client.Do(request)
+	if err != nil {
+		if err != nil {
+			log.Printf("error on the external api request: %v\n", err.Error())
+			return model.PokemonData{}, fmt.Errorf("error retrieving data")
+		}
 	}
 
 	data, err := ioutil.ReadAll(response.Body)
